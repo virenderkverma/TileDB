@@ -32,7 +32,7 @@
 
 #include "tiledb/sm/filesystem/vfs.h"
 #include "tiledb/sm/filesystem/hdfs_filesystem.h"
-#include "tiledb/sm/filesystem/posix_filesystem.h"
+#include "tiledb/sm/filesystem/posix.h"
 #include "tiledb/sm/filesystem/win_filesystem.h"
 #include "tiledb/sm/misc/logger.h"
 #include "tiledb/sm/misc/stats.h"

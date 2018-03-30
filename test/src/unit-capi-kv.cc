@@ -34,7 +34,7 @@
 #ifdef _WIN32
 #include "tiledb/sm/filesystem/win_filesystem.h"
 #else
-#include "tiledb/sm/filesystem/posix_filesystem.h"
+#include "tiledb/sm/filesystem/posix.h"
 #endif
 #include "tiledb/sm/c_api/tiledb.h"
 #include "tiledb/sm/misc/utils.h"

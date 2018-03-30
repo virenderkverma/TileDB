@@ -1,5 +1,5 @@
 /**
- * @file   posix_filesystem.cc
+ * @file   posix.cc
  *
  * @section LICENSE
  *
@@ -32,7 +32,7 @@
 
 #ifndef _WIN32
 
-#include "tiledb/sm/filesystem/posix_filesystem.h"
+#include "tiledb/sm/filesystem/posix.h"
 #include "tiledb/sm/misc/constants.h"
 #include "tiledb/sm/misc/logger.h"
 #include "tiledb/sm/misc/utils.h"

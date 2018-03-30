@@ -1,5 +1,5 @@
 /**
- * @file   posix_filesystem.h
+ * @file   posix.h
  *
  * @section LICENSE
  *

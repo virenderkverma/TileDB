@@ -44,7 +44,9 @@
 #include "tiledb/sm/buffer/buffer.h"
 #include "tiledb/sm/filesystem/filelock.h"
 #include "tiledb/sm/misc/status.h"
+#include "tiledb/sm/misc/thread_pool.h"
 #include "tiledb/sm/misc/uri.h"
+#include "tiledb/sm/storage_manager/config.h"
 
 namespace tiledb {
 namespace sm {
@@ -133,6 +135,15 @@ class Posix {
   Status filelock_unlock(int fd) const;
 
   /**
+   * Initialize this instance with the given parameters.
+   *
+   * @param vfs_params Params from the parent VFS instance.
+   * @param vfs_thread_pool ThreadPool from the parent VFS instance.
+   * @return Status
+   */
+  Status init(const Config::VFSParams& vfs_params, ThreadPool* vfs_thread_pool);
+
+  /**
    * Checks if the input is an existing directory.
    *
    * @param dir The directory to be checked.
@@ -177,7 +188,10 @@ class Posix {
    * @return Status.
    */
   Status read(
-      const std::string& path, uint64_t offset, void* buffer, uint64_t nbytes) const;
+      const std::string& path,
+      uint64_t offset,
+      void* buffer,
+      uint64_t nbytes) const;
 
   /**
    * Syncs a file or directory.
@@ -202,6 +216,12 @@ class Posix {
       const std::string& path, const void* buffer, uint64_t buffer_size);
 
  private:
+  /** Config parameters from parent VFS instance. */
+  Config::VFSParams vfs_params_;
+
+  /** Thread pool from parent VFS instance. */
+  ThreadPool* vfs_thread_pool_;
+
   static void adjacent_slashes_dedup(std::string* path);
 
   static bool both_slashes(char a, char b);

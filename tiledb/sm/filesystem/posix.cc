@@ -249,6 +249,19 @@ Status Posix::filelock_unlock(filelock_t fd) const {
   return Status::Ok();
 }
 
+Status Posix::init(
+    const Config::VFSParams& vfs_params, ThreadPool* vfs_thread_pool) {
+  if (vfs_thread_pool == nullptr) {
+    return LOG_STATUS(
+        Status::VFSError("Cannot initialize with null thread pool"));
+  }
+
+  vfs_params_ = vfs_params;
+  vfs_thread_pool_ = vfs_thread_pool;
+
+  return Status::Ok();
+}
+
 bool Posix::is_dir(const std::string& path) const {
   struct stat st;
   memset(&st, 0, sizeof(struct stat));
@@ -261,7 +274,8 @@ bool Posix::is_file(const std::string& path) const {
   return (stat(path.c_str(), &st) == 0) && !S_ISDIR(st.st_mode);
 }
 
-Status Posix::ls(const std::string& path, std::vector<std::string>* paths) const {
+Status Posix::ls(
+    const std::string& path, std::vector<std::string>* paths) const {
   struct dirent* next_path = nullptr;
   DIR* dir = opendir(path.c_str());
   if (dir == nullptr) {
@@ -345,7 +359,10 @@ void Posix::purge_dots_from_path(std::string* path) {
 }
 
 Status Posix::read(
-    const std::string& path, uint64_t offset, void* buffer, uint64_t nbytes) const {
+    const std::string& path,
+    uint64_t offset,
+    void* buffer,
+    uint64_t nbytes) const {
   // Open file
   int fd = open(path.c_str(), O_RDONLY);
   if (fd == -1) {

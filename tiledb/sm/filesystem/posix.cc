@@ -36,6 +36,7 @@
 #include "tiledb/sm/misc/constants.h"
 #include "tiledb/sm/misc/logger.h"
 #include "tiledb/sm/misc/utils.h"
+#include "tiledb/sm/misc/stats.h"
 
 #include <dirent.h>
 
@@ -429,8 +430,8 @@ Status Posix::sync(const std::string& path) {
 
 Status Posix::write(
     const std::string& path, const void* buffer, uint64_t buffer_size) {
-  uint64_t size = 0;
-  if (is_file(path) && !file_size(path, &size).ok()) {
+  uint64_t file_offset = 0;
+  if (is_file(path) && !file_size(path, &file_offset).ok()) {
     return LOG_STATUS(
         Status::IOError(std::string("Cannot write to file '") + path));
   }
@@ -442,10 +443,41 @@ Status Posix::write(
         std::string("Cannot open file '") + path + "'; " + strerror(errno)));
   }
 
-  if (!write_at(fd, size, buffer, buffer_size).ok()) {
-    close(fd);
-    return LOG_STATUS(
-        Status::IOError(std::string("Cannot write to file '") + path));
+  // Ensure that each thread is responsible for at least min_parallel_size
+  // bytes, and cap the number of parallel operations at the thread pool size.
+  uint64_t num_ops = std::min(
+      std::max(buffer_size / vfs_params_.min_parallel_size_, uint64_t(1)),
+      vfs_thread_pool_->num_threads());
+
+  if (num_ops == 1) {
+    if (!write_at(fd, file_offset, buffer, buffer_size).ok()) {
+      close(fd);
+      return LOG_STATUS(
+          Status::IOError(std::string("Cannot write to file '") + path));
+    }
+  } else {
+    STATS_COUNTER_ADD(vfs_posix_write_num_parallelized, 1);
+    std::vector<std::future<Status>> results;
+    uint64_t thread_write_nbytes = utils::ceil(buffer_size, num_ops);
+
+    for (uint64_t i = 0; i < num_ops; i++) {
+      uint64_t begin = i * thread_write_nbytes,
+          end = std::min((i + 1) * thread_write_nbytes - 1, buffer_size - 1);
+      uint64_t thread_nbytes = end - begin + 1;
+      uint64_t thread_file_offset = file_offset + begin;
+      auto thread_buffer = reinterpret_cast<const char*>(buffer) + begin;
+      results.push_back(vfs_thread_pool_->enqueue(
+          [fd, thread_file_offset, thread_buffer, thread_nbytes]() {
+            return write_at(fd, thread_file_offset, thread_buffer, thread_nbytes);
+          }));
+    }
+
+    bool all_ok = vfs_thread_pool_->wait_all(results);
+    if (!all_ok) {
+      close(fd);
+      return LOG_STATUS(
+          Status::IOError(std::string("Cannot write to file '") + path));
+    }
   }
 
   if (close(fd) != 0) {

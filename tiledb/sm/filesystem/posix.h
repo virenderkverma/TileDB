@@ -280,7 +280,7 @@ class Posix {
    * @param buffer_size Number of bytes to write
    * @return Status
    */
-  Status write_at(
+  static Status write_at(
       int fd, uint64_t file_offset, const void* buffer, uint64_t buffer_size);
 };
 

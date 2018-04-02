@@ -627,6 +627,7 @@ TEST_CASE_METHOD(VFSFx, "C API: Test virtual filesystem", "[capi], [vfs]") {
     check_vfs(FILE_TEMP_DIR);
 
   CHECK(tiledb::sm::stats::all_stats.counter_vfs_read_num_parallelized == 0);
+  CHECK(tiledb::sm::stats::all_stats.counter_vfs_posix_write_num_parallelized == 0);
 }
 
 TEST_CASE_METHOD(
@@ -695,4 +696,5 @@ TEST_CASE_METHOD(VFSFx, "C API: Test VFS parallel I/O", "[capi], [vfs]") {
     check_vfs(FILE_TEMP_DIR);
 
   CHECK(tiledb::sm::stats::all_stats.counter_vfs_read_num_parallelized > 0);
+  CHECK(tiledb::sm::stats::all_stats.counter_vfs_posix_write_num_parallelized > 0);
 }

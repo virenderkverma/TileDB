@@ -39,30 +39,18 @@
 
 #include <dirent.h>
 
-#include <ftw.h>
-
 #include <fstream>
 #include <iostream>
 
 namespace tiledb {
 namespace sm {
 
-namespace posix {
-
-bool both_slashes(char a, char b) {
+bool Posix::both_slashes(char a, char b) {
   return a == '/' && b == '/';
 }
 
-/**
- * Reads all nbytes from the given file descriptor, retrying as necessary.
- *
- * @param fd Open file descriptor to read from
- * @param buffer Buffer to hold read data
- * @param nbytes Number of bytes to read
- * @param offset Offset in file to start reading from.
- * @return Number of bytes actually read (< nbytes on error).
- */
-uint64_t read_all(int fd, void* buffer, uint64_t nbytes, uint64_t offset) {
+uint64_t Posix::read_all(
+    int fd, void* buffer, uint64_t nbytes, uint64_t offset) {
   auto bytes = reinterpret_cast<char*>(buffer);
   uint64_t nread = 0;
   do {
@@ -80,15 +68,7 @@ uint64_t read_all(int fd, void* buffer, uint64_t nbytes, uint64_t offset) {
   return nread;
 }
 
-/**
- * Writes all nbytes to the given file descriptor, retrying as necessary.
- *
- * @param fd Open file descriptor to write to
- * @param buffer Buffer with data to write
- * @param nbytes Number of bytes to write
- * @return Number of bytes actually written (< nbytes on error).
- */
-uint64_t write_all(int fd, const void* buffer, uint64_t nbytes) {
+uint64_t Posix::write_all(int fd, const void* buffer, uint64_t nbytes) {
   auto bytes = reinterpret_cast<const char*>(buffer);
   uint64_t written = 0;
   do {
@@ -105,7 +85,7 @@ uint64_t write_all(int fd, const void* buffer, uint64_t nbytes) {
   return written;
 }
 
-void adjacent_slashes_dedup(std::string* path) {
+void Posix::adjacent_slashes_dedup(std::string* path) {
   assert(utils::starts_with(*path, "file://"));
   path->erase(
       std::unique(
@@ -115,7 +95,7 @@ void adjacent_slashes_dedup(std::string* path) {
       path->end());
 }
 
-std::string abs_path(const std::string& path) {
+std::string Posix::abs_path(const std::string& path) {
   // Initialize current, home and root
   std::string current = current_dir();
   auto env_home_ptr = getenv("HOME");
@@ -150,9 +130,9 @@ std::string abs_path(const std::string& path) {
   return ret_dir;
 }
 
-Status create_dir(const std::string& path) {
+Status Posix::create_dir(const std::string& path) const {
   // If the directory does not exist, create it
-  if (posix::is_dir(path)) {
+  if (is_dir(path)) {
     return LOG_STATUS(Status::IOError(
         std::string("Cannot create directory '") + path +
         "'; Directory already exists"));
@@ -165,7 +145,7 @@ Status create_dir(const std::string& path) {
   return Status::Ok();
 }
 
-Status touch(const std::string& filename) {
+Status Posix::touch(const std::string& filename) const {
   int fd = ::open(filename.c_str(), O_WRONLY | O_CREAT | O_SYNC, S_IRWXU);
   if (fd == -1 || ::close(fd) != 0) {
     return LOG_STATUS(Status::IOError(
@@ -176,7 +156,7 @@ Status touch(const std::string& filename) {
   return Status::Ok();
 }
 
-std::string current_dir() {
+std::string Posix::current_dir() {
   std::string dir;
   char* path = getcwd(nullptr, 0);
   if (path != nullptr) {
@@ -188,7 +168,7 @@ std::string current_dir() {
 
 // TODO: it maybe better to use unlinkat for deeply nested recursive directories
 // but the path name length limit in TileDB may make this unnecessary
-int unlink_cb(
+int Posix::unlink_cb(
     const char* fpath,
     const struct stat* sb,
     int typeflag,
@@ -202,7 +182,7 @@ int unlink_cb(
   return rc;
 }
 
-Status remove_dir(const std::string& path) {
+Status Posix::remove_dir(const std::string& path) const {
   int rc = nftw(path.c_str(), unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
   if (rc)
     return LOG_STATUS(Status::IOError(
@@ -211,7 +191,7 @@ Status remove_dir(const std::string& path) {
   return Status::Ok();
 }
 
-Status remove_file(const std::string& path) {
+Status Posix::remove_file(const std::string& path) const {
   if (remove(path.c_str()) != 0) {
     return LOG_STATUS(Status::IOError(
         std::string("Cannot delete file '") + path + "'; " + strerror(errno)));
@@ -219,7 +199,7 @@ Status remove_file(const std::string& path) {
   return Status::Ok();
 }
 
-Status file_size(const std::string& path, uint64_t* size) {
+Status Posix::file_size(const std::string& path, uint64_t* size) const {
   int fd = open(path.c_str(), O_RDONLY);
   if (fd == -1) {
     return LOG_STATUS(
@@ -234,7 +214,8 @@ Status file_size(const std::string& path, uint64_t* size) {
   return Status::Ok();
 }
 
-Status filelock_lock(const std::string& filename, filelock_t* fd, bool shared) {
+Status Posix::filelock_lock(
+    const std::string& filename, filelock_t* fd, bool shared) const {
   // Prepare the flock struct
   struct flock fl;
   memset(&fl, 0, sizeof(struct flock));
@@ -261,26 +242,26 @@ Status filelock_lock(const std::string& filename, filelock_t* fd, bool shared) {
   return Status::Ok();
 }
 
-Status filelock_unlock(filelock_t fd) {
+Status Posix::filelock_unlock(filelock_t fd) const {
   if (::close(fd) == -1)
     return LOG_STATUS(Status::IOError(
         "Cannot unlock consolidation filelock: Cannot close filelock"));
   return Status::Ok();
 }
 
-bool is_dir(const std::string& path) {
+bool Posix::is_dir(const std::string& path) const {
   struct stat st;
   memset(&st, 0, sizeof(struct stat));
   return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
 }
 
-bool is_file(const std::string& path) {
+bool Posix::is_file(const std::string& path) const {
   struct stat st;
   memset(&st, 0, sizeof(struct stat));
   return (stat(path.c_str(), &st) == 0) && !S_ISDIR(st.st_mode);
 }
 
-Status ls(const std::string& path, std::vector<std::string>* paths) {
+Status Posix::ls(const std::string& path, std::vector<std::string>* paths) const {
   struct dirent* next_path = nullptr;
   DIR* dir = opendir(path.c_str());
   if (dir == nullptr) {
@@ -300,7 +281,8 @@ Status ls(const std::string& path, std::vector<std::string>* paths) {
   return Status::Ok();
 }
 
-Status move_path(const std::string& old_path, const std::string& new_path) {
+Status Posix::move_path(
+    const std::string& old_path, const std::string& new_path) {
   if (rename(old_path.c_str(), new_path.c_str()) != 0) {
     return LOG_STATUS(
         Status::IOError(std::string("Cannot move path: ") + strerror(errno)));
@@ -308,7 +290,7 @@ Status move_path(const std::string& old_path, const std::string& new_path) {
   return Status::Ok();
 }
 
-void purge_dots_from_path(std::string* path) {
+void Posix::purge_dots_from_path(std::string* path) {
   // Trivial case
   if (path == nullptr)
     return;
@@ -362,8 +344,8 @@ void purge_dots_from_path(std::string* path) {
     *path += std::string("/") + t;
 }
 
-Status read(
-    const std::string& path, uint64_t offset, void* buffer, uint64_t nbytes) {
+Status Posix::read(
+    const std::string& path, uint64_t offset, void* buffer, uint64_t nbytes) const {
   // Open file
   int fd = open(path.c_str(), O_RDONLY);
   if (fd == -1) {
@@ -394,12 +376,12 @@ Status read(
   return Status::Ok();
 }
 
-Status sync(const std::string& path) {
+Status Posix::sync(const std::string& path) {
   // Open file
   int fd = -1;
-  if (posix::is_dir(path))  // DIRECTORY
+  if (is_dir(path))  // DIRECTORY
     fd = open(path.c_str(), O_RDONLY, S_IRWXU);
-  else if (posix::is_file(path))  // FILE
+  else if (is_file(path))  // FILE
     fd = open(path.c_str(), O_WRONLY | O_APPEND | O_CREAT, S_IRWXU);
   else
     return Status::Ok();  // If file does not exist, exit
@@ -426,7 +408,7 @@ Status sync(const std::string& path) {
   return Status::Ok();
 }
 
-Status write(
+Status Posix::write(
     const std::string& path, const void* buffer, uint64_t buffer_size) {
   // Open file
   int fd = open(path.c_str(), O_WRONLY | O_APPEND | O_CREAT, S_IRWXU);
@@ -470,8 +452,6 @@ Status write(
   // Success
   return Status::Ok();
 }
-
-}  // namespace posix
 
 }  // namespace sm
 }  // namespace tiledb

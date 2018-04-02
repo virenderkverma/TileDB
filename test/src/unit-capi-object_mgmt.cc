@@ -60,7 +60,7 @@ struct ObjectMgmtFx {
 #else
   const std::string FILE_URI_PREFIX = "file://";
   const std::string FILE_TEMP_DIR =
-      tiledb::sm::posix::current_dir() + "/tiledb_test/";
+      tiledb::sm::Posix::current_dir() + "/tiledb_test/";
   const std::string FILE_FULL_TEMP_DIR = std::string("file://") + FILE_TEMP_DIR;
   const std::string GROUP = "group/";
   const std::string ARRAY = "array/";

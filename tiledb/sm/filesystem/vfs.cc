@@ -32,7 +32,6 @@
 
 #include "tiledb/sm/filesystem/vfs.h"
 #include "tiledb/sm/filesystem/hdfs_filesystem.h"
-#include "tiledb/sm/filesystem/posix.h"
 #include "tiledb/sm/filesystem/win_filesystem.h"
 #include "tiledb/sm/misc/logger.h"
 #include "tiledb/sm/misc/stats.h"
@@ -90,7 +89,7 @@ std::string VFS::abs_path(const std::string& path) {
     return win::uri_from_path(win::abs_path(win::path_from_uri(path)));
 #else
   if (URI::is_file(path))
-    return posix::abs_path(path);
+    return Posix::abs_path(path);
 #endif
   if (URI::is_hdfs(path))
     return path;
@@ -120,7 +119,7 @@ Status VFS::create_dir(const URI& uri) const {
 #ifdef _WIN32
     return win::create_dir(uri.to_path());
 #else
-    return posix::create_dir(uri.to_path());
+    return posix_.create_dir(uri.to_path());
 #endif
   }
   if (uri.is_hdfs()) {
@@ -152,7 +151,7 @@ Status VFS::touch(const URI& uri) const {
 #ifdef _WIN32
     return win::touch(uri.to_path());
 #else
-    return posix::touch(uri.to_path());
+    return posix_.touch(uri.to_path());
 #endif
   }
   if (uri.is_hdfs()) {
@@ -256,7 +255,7 @@ Status VFS::remove_dir(const URI& uri) const {
 #ifdef _WIN32
     return win::remove_dir(uri.to_path());
 #else
-    return posix::remove_dir(uri.to_path());
+    return posix_.remove_dir(uri.to_path());
 #endif
   } else if (uri.is_hdfs()) {
 #ifdef HAVE_HDFS
@@ -286,7 +285,7 @@ Status VFS::remove_file(const URI& uri) const {
 #ifdef _WIN32
     return win::remove_file(uri.to_path());
 #else
-    return posix::remove_file(uri.to_path());
+    return posix_.remove_file(uri.to_path());
 #endif
   }
   if (uri.is_hdfs()) {
@@ -317,7 +316,7 @@ Status VFS::filelock_lock(const URI& uri, filelock_t* fd, bool shared) const {
 #ifdef _WIN32
     return win::filelock_lock(uri.to_path(), fd, shared);
 #else
-    return posix::filelock_lock(uri.to_path(), fd, shared);
+    return posix_.filelock_lock(uri.to_path(), fd, shared);
 #endif
 
   if (uri.is_hdfs()) {
@@ -348,7 +347,7 @@ Status VFS::filelock_unlock(const URI& uri, filelock_t fd) const {
 #ifdef _WIN32
     return win::filelock_unlock(fd);
 #else
-    return posix::filelock_unlock(fd);
+    return posix_.filelock_unlock(fd);
 #endif
   }
   if (uri.is_hdfs()) {
@@ -379,7 +378,7 @@ Status VFS::file_size(const URI& uri, uint64_t* size) const {
 #ifdef _WIN32
     return win::file_size(uri.to_path(), size);
 #else
-    return posix::file_size(uri.to_path(), size);
+    return posix_.file_size(uri.to_path(), size);
 #endif
   }
   if (uri.is_hdfs()) {
@@ -410,7 +409,7 @@ Status VFS::is_dir(const URI& uri, bool* is_dir) const {
 #ifdef _WIN32
     *is_dir = win::is_dir(uri.to_path());
 #else
-    *is_dir = posix::is_dir(uri.to_path());
+    *is_dir = posix_.is_dir(uri.to_path());
 #endif
     return Status::Ok();
   }
@@ -445,7 +444,7 @@ Status VFS::is_file(const URI& uri, bool* is_file) const {
 #ifdef _WIN32
     *is_file = win::is_file(uri.to_path());
 #else
-    *is_file = posix::is_file(uri.to_path());
+    *is_file = posix_.is_file(uri.to_path());
 #endif
     return Status::Ok();
   }
@@ -533,7 +532,7 @@ Status VFS::ls(const URI& parent, std::vector<URI>* uris) const {
 #ifdef _WIN32
     RETURN_NOT_OK(win::ls(parent.to_path(), &paths));
 #else
-    RETURN_NOT_OK(posix::ls(parent.to_path(), &paths));
+    RETURN_NOT_OK(posix_.ls(parent.to_path(), &paths));
 #endif
   } else if (parent.is_hdfs()) {
 #ifdef HAVE_HDFS
@@ -576,7 +575,7 @@ Status VFS::move_file(const URI& old_uri, const URI& new_uri) {
 #ifdef _WIN32
       return win::move_path(old_uri.to_path(), new_uri.to_path());
 #else
-      return posix::move_path(old_uri.to_path(), new_uri.to_path());
+      return posix_.move_path(old_uri.to_path(), new_uri.to_path());
 #endif
     }
     return LOG_STATUS(Status::VFSError(
@@ -626,7 +625,7 @@ Status VFS::move_dir(const URI& old_uri, const URI& new_uri) {
 #ifdef _WIN32
       return win::move_path(old_uri.to_path(), new_uri.to_path());
 #else
-      return posix::move_path(old_uri.to_path(), new_uri.to_path());
+      return posix_.move_path(old_uri.to_path(), new_uri.to_path());
 #endif
     }
     return LOG_STATUS(Status::VFSError(
@@ -711,7 +710,7 @@ Status VFS::read_impl(
 #ifdef _WIN32
     return win::read(uri.to_path(), offset, buffer, nbytes);
 #else
-    return posix::read(uri.to_path(), offset, buffer, nbytes);
+    return posix_.read(uri.to_path(), offset, buffer, nbytes);
 #endif
   }
   if (uri.is_hdfs()) {
@@ -748,7 +747,7 @@ Status VFS::sync(const URI& uri) {
 #ifdef _WIN32
     return win::sync(uri.to_path());
 #else
-    return posix::sync(uri.to_path());
+    return posix_.sync(uri.to_path());
 #endif
   }
   if (uri.is_hdfs()) {
@@ -815,7 +814,7 @@ Status VFS::close_file(const URI& uri) {
 #ifdef _WIN32
     return win::sync(uri.to_path());
 #else
-    return posix::sync(uri.to_path());
+    return posix_.sync(uri.to_path());
 #endif
   }
   if (uri.is_hdfs()) {
@@ -847,7 +846,7 @@ Status VFS::write(const URI& uri, const void* buffer, uint64_t buffer_size) {
 #ifdef _WIN32
     return win::write(uri.to_path(), buffer, buffer_size);
 #else
-    return posix::write(uri.to_path(), buffer, buffer_size);
+    return posix_.write(uri.to_path(), buffer, buffer_size);
 #endif
   }
   if (uri.is_hdfs()) {

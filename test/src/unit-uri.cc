@@ -49,7 +49,7 @@ static std::string current_dir() {
 #else
 static const char PATH_SEPARATOR = '/';
 static std::string current_dir() {
-  return posix::current_dir();
+  return Posix::current_dir();
 }
 #endif
 
@@ -89,7 +89,7 @@ TEST_CASE("URI: Test relative paths", "[uri]") {
 #ifdef _WIN32
   CHECK(uri.to_string() == win::uri_from_path(win::current_dir()) + "/path1");
 #else
-  CHECK(uri.to_string() == "file://" + posix::current_dir() + "/path1");
+  CHECK(uri.to_string() == "file://" + Posix::current_dir() + "/path1");
 #endif
 
   uri = URI(".");

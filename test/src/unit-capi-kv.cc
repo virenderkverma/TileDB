@@ -75,7 +75,7 @@ struct KVFx {
 #else
   const std::string FILE_URI_PREFIX = "file://";
   const std::string FILE_TEMP_DIR =
-      tiledb::sm::posix::current_dir() + "/tiledb_test/";
+      tiledb::sm::Posix::current_dir() + "/tiledb_test/";
 #endif
 
   // TileDB context

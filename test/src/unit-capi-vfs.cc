@@ -53,7 +53,7 @@ struct VFSFx {
       tiledb::sm::win::current_dir() + "\\tiledb_test\\";
 #else
   const std::string FILE_TEMP_DIR = std::string("file://") +
-                                    tiledb::sm::posix::current_dir() +
+                                    tiledb::sm::Posix::current_dir() +
                                     "/tiledb_test/";
 #endif
 

@@ -261,11 +261,27 @@ class Posix {
    * Writes all nbytes to the given file descriptor, retrying as necessary.
    *
    * @param fd Open file descriptor to write to
+   * @param file_offset File offset at which to write.
    * @param buffer Buffer with data to write
    * @param nbytes Number of bytes to write
    * @return Number of bytes actually written (< nbytes on error).
    */
-  static uint64_t write_all(int fd, const void* buffer, uint64_t nbytes);
+  static uint64_t pwrite_all(
+      int fd, uint64_t file_offset, const void* buffer, uint64_t nbytes);
+
+  /**
+   * Write data from the given buffer to the file descriptor, beginning at the
+   * given offset. Multiple threads can safely write to the same open file
+   * descriptor.
+   *
+   * @param fd Open file descriptor to write to
+   * @param file_offset Offset in the file at which to start writing
+   * @param buffer Buffer of data to write
+   * @param buffer_size Number of bytes to write
+   * @return Status
+   */
+  Status write_at(
+      int fd, uint64_t file_offset, const void* buffer, uint64_t buffer_size);
 };
 
 }  // namespace sm

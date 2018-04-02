@@ -68,11 +68,13 @@ uint64_t Posix::read_all(
   return nread;
 }
 
-uint64_t Posix::write_all(int fd, const void* buffer, uint64_t nbytes) {
+uint64_t Posix::pwrite_all(
+    int fd, uint64_t file_offset, const void* buffer, uint64_t nbytes) {
   auto bytes = reinterpret_cast<const char*>(buffer);
   uint64_t written = 0;
   do {
-    ssize_t actual_written = ::write(fd, bytes + written, nbytes - written);
+    ssize_t actual_written =
+        ::pwrite(fd, bytes + written, nbytes - written, file_offset + written);
     if (actual_written == -1) {
       LOG_STATUS(
           Status::Error(std::string("POSIX write error: ") + strerror(errno)));
@@ -427,43 +429,60 @@ Status Posix::sync(const std::string& path) {
 
 Status Posix::write(
     const std::string& path, const void* buffer, uint64_t buffer_size) {
-  // Open file
-  int fd = open(path.c_str(), O_WRONLY | O_APPEND | O_CREAT, S_IRWXU);
-  if (fd == -1) {
-    return LOG_STATUS(Status::IOError(
-        std::string("Cannot write to file '") + path + "'; " +
-        strerror(errno)));
+  uint64_t size = 0;
+  if (is_file(path) && !file_size(path, &size).ok()) {
+    return LOG_STATUS(
+        Status::IOError(std::string("Cannot write to file '") + path));
   }
 
+  // Open or create file.
+  int fd = open(path.c_str(), O_WRONLY | O_CREAT, S_IRWXU);
+  if (fd == -1) {
+    return LOG_STATUS(Status::IOError(
+        std::string("Cannot open file '") + path + "'; " + strerror(errno)));
+  }
+
+  if (!write_at(fd, size, buffer, buffer_size).ok()) {
+    close(fd);
+    return LOG_STATUS(
+        Status::IOError(std::string("Cannot write to file '") + path));
+  }
+
+  if (close(fd) != 0) {
+    return LOG_STATUS(Status::IOError(
+        std::string("Cannot close file '") + path + "'; " + strerror(errno)));
+  }
+
+  return Status::Ok();
+}
+
+Status Posix::write_at(
+    int fd, uint64_t file_offset, const void* buffer, uint64_t buffer_size) {
   // Append data to the file in batches of constants::max_write_bytes
   // bytes at a time
   uint64_t buffer_bytes_written = 0;
   const char* buffer_bytes_ptr = static_cast<const char*>(buffer);
   while (buffer_size > constants::max_write_bytes) {
-    uint64_t bytes_written = write_all(
+    uint64_t bytes_written = pwrite_all(
         fd,
+        file_offset + buffer_bytes_written,
         buffer_bytes_ptr + buffer_bytes_written,
         constants::max_write_bytes);
     if (bytes_written != constants::max_write_bytes) {
       return LOG_STATUS(Status::IOError(
-          std::string("Cannot write to file '") + path +
-          "'; File writing error"));
+          std::string("Cannot write to file; File writing error")));
     }
     buffer_bytes_written += bytes_written;
     buffer_size -= bytes_written;
   }
-  uint64_t bytes_written =
-      write_all(fd, buffer_bytes_ptr + buffer_bytes_written, buffer_size);
+  uint64_t bytes_written = pwrite_all(
+      fd,
+      file_offset + buffer_bytes_written,
+      buffer_bytes_ptr + buffer_bytes_written,
+      buffer_size);
   if (bytes_written != buffer_size) {
     return LOG_STATUS(Status::IOError(
-        std::string("Cannot write to file '") + path +
-        "'; File writing error"));
-  }
-
-  // Close file
-  if (close(fd) != 0) {
-    return LOG_STATUS(Status::IOError(
-        std::string("Cannot close file '") + path + "'; " + strerror(errno)));
+        std::string("Cannot write to file; File writing error")));
   }
 
   // Success

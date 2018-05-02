@@ -167,13 +167,26 @@ class Reader {
     const T* coords_;
     /** The position of the coordinates in the tile. */
     uint64_t pos_;
+    /** Whether this instance is "valid". */
+    bool valid_;
 
     /** Constructor. */
     OverlappingCoords(
         const OverlappingTile* tile, const T* coords, uint64_t pos)
         : tile_(tile)
         , coords_(coords)
-        , pos_(pos) {
+        , pos_(pos)
+        , valid_(true) {
+    }
+
+    /** Invalidate this instance. */
+    void invalidate() {
+      valid_ = false;
+    }
+
+    /** Return true if this instance is valid. */
+    bool valid() const {
+      return valid_;
     }
   };
 
@@ -182,7 +195,7 @@ class Reader {
    */
   template <typename T>
   using OverlappingCoordsList =
-      std::vector<std::unique_ptr<OverlappingCoords<T>>>;
+      std::vector<OverlappingCoords<T>>;
 
   /** A cell range produced by the dense read algorithm. */
   template <class T>

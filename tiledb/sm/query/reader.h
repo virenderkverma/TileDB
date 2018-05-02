@@ -182,7 +182,7 @@ class Reader {
    */
   template <typename T>
   using OverlappingCoordsList =
-      std::list<std::unique_ptr<OverlappingCoords<T>>>;
+      std::vector<std::unique_ptr<OverlappingCoords<T>>>;
 
   /** A cell range produced by the dense read algorithm. */
   template <class T>

@@ -41,6 +41,38 @@
 namespace tiledb {
 namespace sm {
 
+namespace {
+/**
+ * If the given iterator points to a `nullptr` element, advance it until the
+ * pointed-to element is non-null, or `end`.
+ *
+ * Example:
+ *
+ * @code{.cpp}
+ * std::vector<T*> vec = ...;
+ * // Get an iterator to the first non-null vec element, or vec.end() if the
+ * // vector is empty or only contains nulls.
+ * auto it = skip_null_it_elements(vec.begin(), vec.end());
+ * // If there was a non-null element, now advance the iterator to the next
+ * // non-null element (or vec.end() if there are no more).
+ * it = skip_null_it_elements(++it, vec.end());
+ * @endcode
+ *
+ *
+ * @tparam IterT The iterator type
+ * @param it The iterator
+ * @param end The end iterator value
+ * @return Iterator pointing to a non-null element, or `end`.
+ */
+template <typename IterT>
+inline IterT skip_null_it_elements(IterT it, const IterT& end) {
+  while (it != end && *it == nullptr) {
+    ++it;
+  }
+  return it;
+}
+}  // namespace
+
 /* ****************************** */
 /*   CONSTRUCTORS & DESTRUCTORS   */
 /* ****************************** */
@@ -370,13 +402,18 @@ Status Reader::compute_cell_ranges(
     return Status::Ok();
 
   // Initialize the first range
-  auto it = coords.begin();
+  auto coords_end = coords.end();
+  auto it = skip_null_it_elements(coords.begin(), coords_end);
+  if (it == coords_end) {
+    return LOG_STATUS(Status::ReaderError("Unexpected empty cell range."));
+  }
   uint64_t start_pos = it->get()->pos_;
   uint64_t end_pos = start_pos;
   auto tile = it->get()->tile_;
 
   // Scan the coordinates and compute ranges
-  for (++it; it != coords.end(); ++it) {
+  it = skip_null_it_elements(++it, coords_end);
+  while (it != coords_end) {
     if (it->get()->tile_ == tile && it->get()->pos_ == end_pos + 1) {
       // Same range - advance end position
       end_pos = it->get()->pos_;
@@ -388,6 +425,7 @@ Status Reader::compute_cell_ranges(
       end_pos = start_pos;
       tile = it->get()->tile_;
     }
+    it = skip_null_it_elements(++it, coords_end);
   }
 
   // Append the last range
@@ -521,13 +559,14 @@ Status Reader::compute_dense_overlapping_tiles_and_cell_ranges(
   auto end = cr_it->end_;
 
   // Initialize coords info
-  auto coords_it = coords.begin();
+  auto coords_end = coords.end();
+  auto coords_it = skip_null_it_elements(coords.begin(), coords_end);
   std::vector<T> coords_tile_coords;
   coords_tile_coords.resize(dim_num);
   uint64_t coords_pos = 0;
   unsigned coords_fidx = 0;
   const OverlappingTile* coords_tile = nullptr;
-  if (coords_it != coords.end()) {
+  if (coords_it != coords_end) {
     domain->get_tile_coords(coords_it->get()->coords_, &coords_tile_coords[0]);
     RETURN_NOT_OK(
         domain->get_cell_pos<T>(coords_it->get()->coords_, &coords_pos));
@@ -624,13 +663,11 @@ template <class T>
 Status Reader::compute_overlapping_coords(
     const OverlappingTileVec& tiles, OverlappingCoordsList<T>* coords) const {
   for (const auto& tile : tiles) {
-    OverlappingCoordsList<T> tile_coords;
     if (tile->full_overlap_) {
-      RETURN_NOT_OK(get_all_coords<T>(tile.get(), &tile_coords));
+      RETURN_NOT_OK(get_all_coords<T>(tile.get(), coords));
     } else {
-      RETURN_NOT_OK(compute_overlapping_coords<T>(tile.get(), &tile_coords));
+      RETURN_NOT_OK(compute_overlapping_coords<T>(tile.get(), coords));
     }
-    coords->splice(coords->end(), tile_coords);
   }
 
   return Status::Ok();
@@ -828,20 +865,22 @@ Status Reader::copy_var_cells(
 template <class T>
 Status Reader::dedup_coords(OverlappingCoordsList<T>* coords) const {
   auto coords_size = array_schema_->coords_size();
-  auto it = coords->begin();
-  while (it != coords->end()) {
-    auto next_it = std::next(it);
-    if (next_it != coords->end() &&
+  auto coords_end = coords->end();
+  auto it = skip_null_it_elements(coords->begin(), coords_end);
+  while (it != coords_end) {
+    auto next_it = skip_null_it_elements(std::next(it), coords_end);
+    if (next_it != coords_end &&
         !std::memcmp(
             it->get()->coords_, next_it->get()->coords_, coords_size)) {
       if (it->get()->tile_->fragment_idx_ <
           next_it->get()->tile_->fragment_idx_) {
-        it = coords->erase(it);
+        it->reset(nullptr);
+        it = skip_null_it_elements(++it, coords_end);
       } else {
-        coords->erase(next_it);
+        next_it->reset(nullptr);
       }
     } else {
-      ++it;
+      it = skip_null_it_elements(++it, coords_end);
     }
   }
   return Status::Ok();
@@ -980,14 +1019,15 @@ Status Reader::handle_coords_in_dense_cell_range(
     std::vector<T>* coords_tile_coords,
     OverlappingCellRangeList* overlapping_cell_ranges) const {
   auto domain = array_schema_->domain();
+  auto coords_end = coords.end();
 
   // While the coords are within the same dense cell range
-  while (*coords_it != coords.end() &&
+  while (*coords_it != coords_end &&
          !memcmp(&(*coords_tile_coords)[0], cur_tile_coords, coords_size) &&
          *coords_pos >= *start && *coords_pos <= end) {
     if (*coords_fidx < cur_tile->fragment_idx_) {  // Skip coords
-      ++(*coords_it);
-      if (*coords_it != coords.end()) {
+      *coords_it = skip_null_it_elements(++(*coords_it), coords_end);
+      if (*coords_it != coords_end) {
         domain->get_tile_coords(
             (*coords_it)->get()->coords_, &(*coords_tile_coords)[0]);
         RETURN_NOT_OK(
@@ -1013,8 +1053,8 @@ Status Reader::handle_coords_in_dense_cell_range(
       *start = *coords_pos + 1;
 
       // Advance coords
-      ++(*coords_it);
-      if (*coords_it != coords.end()) {
+      *coords_it = skip_null_it_elements(++(*coords_it), coords_end);
+      if (*coords_it != coords_end) {
         domain->get_tile_coords(
             (*coords_it)->get()->coords_, &(*coords_tile_coords)[0]);
         RETURN_NOT_OK(
@@ -1262,13 +1302,13 @@ template <class T>
 Status Reader::sort_coords(OverlappingCoordsList<T>* coords) const {
   if (layout_ == Layout::GLOBAL_ORDER) {
     auto domain = array_schema_->domain();
-    coords->sort(GlobalCmp<T>(domain));
+    std::sort(coords->begin(), coords->end(), GlobalCmp<T>(domain));
   } else {
     auto dim_num = array_schema_->dim_num();
     if (layout_ == Layout::ROW_MAJOR)
-      coords->sort(RowCmp<T>(dim_num));
+      std::sort(coords->begin(), coords->end(), RowCmp<T>(dim_num));
     else if (layout_ == Layout::COL_MAJOR)
-      coords->sort(ColCmp<T>(dim_num));
+      std::sort(coords->begin(), coords->end(), ColCmp<T>(dim_num));
   }
 
   return Status::Ok();
